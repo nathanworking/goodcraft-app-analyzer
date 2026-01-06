@@ -1,0 +1,19 @@
+{
+  "productSpec": {
+    "name": "ReceiptPretty",
+    "category": "b2b-saas",
+    "thesis": "Stripe's default receipts are ugly and unprofessional. Businesses want branded, beautiful receipts without hiring a designer or writing code.",
+    "targetUser": "Indie hackers and small SaaS founders who use Stripe",
+    "mvpFeatures": "- Connect Stripe account (OAuth)\n- Choose from 5 receipt templates\n- Add logo and brand colors\n- Auto-send branded receipts",
+    "pricing": "$9/month",
+    "distribution": "Post in Indie Hackers, tweet to dev Twitter, Stripe developer communities"
+  },
+  "founderContext": {
+    "technicalSkill": "senior",
+    "domainExperience": "Built 3 SaaS products, uses Stripe daily",
+    "existingAudience": "2K Twitter followers in indie hacker space, active on Indie Hackers forum",
+    "hoursPerWeek": 25,
+    "runwayMonths": 18,
+    "riskTolerance": "moderate"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "productSpec": {
+    "name": "ClipCast",
+    "category": "creator-tools",
+    "thesis": "Solo podcasters spend 2+ hours per episode finding good clips and creating vertical videos. Existing tools (Descript, Opus) are complex and expensive.",
+    "targetUser": "Solo podcast hosts doing 1-4 episodes/month",
+    "mvpFeatures": "- Upload audio/video file\n- AI finds top 5 clip-worthy moments\n- Generate vertical video with captions\n- Export to TikTok/Reels/Shorts formats",
+    "pricing": "$19/month or $3 per episode",
+    "distribution": "Post in podcasting subreddits, Facebook groups, own podcast"
+  },
+  "founderContext": {
+    "technicalSkill": "intermediate",
+    "domainExperience": "Host podcast for 3 years (200+ episodes), tried every clip tool",
+    "existingAudience": "5K podcast listeners, 1.5K Twitter followers, member of 4 podcasting communities",
+    "hoursPerWeek": 20,
+    "runwayMonths": 12,
+    "riskTolerance": "moderate"
+  }
+}

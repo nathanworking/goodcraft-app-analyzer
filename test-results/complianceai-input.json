@@ -1,0 +1,19 @@
+{
+  "productSpec": {
+    "name": "ComplianceAI",
+    "category": "b2b-saas",
+    "thesis": "Mid-market companies struggle with SOC2/HIPAA compliance. Need automated monitoring and evidence collection.",
+    "targetUser": "Companies with 50-500 employees needing compliance certifications",
+    "mvpFeatures": "- Automated evidence collection from cloud providers\n- Policy template library\n- Risk assessment dashboard\n- Audit preparation workflow\n- Compliance monitoring\n- Vendor risk management",
+    "pricing": "$500/month",
+    "distribution": "Sales team, conferences, content marketing"
+  },
+  "founderContext": {
+    "technicalSkill": "intermediate",
+    "domainExperience": "Worked at startup, never in enterprise sales or security",
+    "existingAudience": "500 LinkedIn connections (mostly college friends)",
+    "hoursPerWeek": 30,
+    "runwayMonths": 12,
+    "riskTolerance": "moderate"
+  }
+}

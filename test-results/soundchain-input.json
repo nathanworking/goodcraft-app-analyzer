@@ -1,0 +1,19 @@
+{
+  "productSpec": {
+    "name": "SoundChain",
+    "category": "marketplace",
+    "thesis": "Musicians get exploited by streaming platforms. They need a blockchain-based platform for direct artist-fan connection with fair compensation.",
+    "targetUser": "Independent musicians who want to 'own their audience'",
+    "mvpFeatures": "- Artist profiles with Web3 wallet integration\n- Music NFT minting\n- Fan subscriptions via tokens\n- Decentralized content storage\n- Social feed\n- Live streaming\n- Tipping with cryptocurrency",
+    "pricing": "Free (token economics)",
+    "distribution": "Pitch to musicians somehow"
+  },
+  "founderContext": {
+    "technicalSkill": "beginner",
+    "domainExperience": "No music industry experience, interested in crypto",
+    "existingAudience": "None",
+    "hoursPerWeek": 15,
+    "runwayMonths": 9,
+    "riskTolerance": "aggressive"
+  }
+}

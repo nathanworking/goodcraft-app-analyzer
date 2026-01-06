@@ -1,0 +1,19 @@
+{
+  "productSpec": {
+    "name": "TailSnip",
+    "category": "developer-tools",
+    "thesis": "Developers waste time rebuilding common Tailwind components. Need curated, copy-paste snippets that work in Cursor IDE.",
+    "targetUser": "Frontend developers using Tailwind CSS and Cursor",
+    "mvpFeatures": "- 50+ curated component snippets\n- Cursor extension with fuzzy search\n- Preview before inserting\n- Customization hints",
+    "pricing": "$29/year or $5/month",
+    "distribution": "Show on GitHub, post in Cursor Discord, tweet demos"
+  },
+  "founderContext": {
+    "technicalSkill": "expert",
+    "domainExperience": "Built VSCode extensions, uses Tailwind daily, contributed to open source",
+    "existingAudience": "10K GitHub followers, 3K Twitter, newsletter with 800 subs",
+    "hoursPerWeek": 15,
+    "runwayMonths": 24,
+    "riskTolerance": "conservative"
+  }
+}

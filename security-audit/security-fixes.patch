@@ -1,0 +1,396 @@
+diff --git a/app/api/analyze/route.ts b/app/api/analyze/route.ts
+index 1234567..abcdefg 100644
+--- a/app/api/analyze/route.ts
++++ b/app/api/analyze/route.ts
+@@ -1,8 +1,59 @@
+ import Anthropic from '@anthropic-ai/sdk';
+ import { NextRequest, NextResponse } from 'next/server';
+ import { buildAnalyzerPrompt, parseAnalyzerResponse } from '@/lib/analyzer-prompt';
+-import { ProductSpec, FounderContext } from '@/lib/types';
++import { AnalyzeRequestSchema } from '@/lib/validation';
+
+-const anthropic = new Anthropic();
++// Rate limiting state (in-memory, consider Redis for production)
++const rateLimit = new Map<string, { count: number; resetTime: number }>();
++const WINDOW_MS = 60 * 1000; // 1 minute
++const MAX_REQUESTS = 5; // 5 requests per minute
++const MAX_BODY_SIZE = 50 * 1024; // 50KB
++
++function checkRateLimit(ip: string): { allowed: boolean; remaining: number; resetIn: number } {
++  const now = Date.now();
++  const record = rateLimit.get(ip);
++
++  if (!record || now > record.resetTime) {
++    rateLimit.set(ip, { count: 1, resetTime: now + WINDOW_MS });
++    return { allowed: true, remaining: MAX_REQUESTS - 1, resetIn: WINDOW_MS };
++  }
++
++  if (record.count >= MAX_REQUESTS) {
++    return { allowed: false, remaining: 0, resetIn: record.resetTime - now };
++  }
++
++  record.count++;
++  return { allowed: true, remaining: MAX_REQUESTS - record.count, resetIn: record.resetTime - now };
++}
++
++// Validate API key at startup
++const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
++if (!ANTHROPIC_API_KEY) {
++  console.error('ANTHROPIC_API_KEY environment variable is not set');
++}
++
++const anthropic = new Anthropic({
++  apiKey: ANTHROPIC_API_KEY,
++});
+
+ export async function POST(request: NextRequest) {
++  // Check API key configuration
++  if (!ANTHROPIC_API_KEY) {
++    return NextResponse.json(
++      { error: 'Service not configured. Please contact administrator.' },
++      { status: 503 }
++    );
++  }
++
++  // Rate limiting
++  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ||
++             request.headers.get('x-real-ip') ||
++             'unknown';
++
++  const { allowed, remaining, resetIn } = checkRateLimit(ip);
++
++  if (!allowed) {
++    return NextResponse.json(
++      { error: 'Too many requests. Please try again later.' },
++      {
++        status: 429,
++        headers: {
++          'X-RateLimit-Remaining': '0',
++          'X-RateLimit-Reset': Math.ceil(resetIn / 1000).toString(),
++          'Retry-After': Math.ceil(resetIn / 1000).toString(),
++        },
++      }
++    );
++  }
++
++  // Request size check
++  const contentLength = request.headers.get('content-length');
++  if (contentLength && parseInt(contentLength) > MAX_BODY_SIZE) {
++    return NextResponse.json(
++      { error: 'Request too large' },
++      { status: 413 }
++    );
++  }
++
+   try {
+     const body = await request.json();
+-    const { productSpec, founderContext } = body as {
+-      productSpec: Partial<ProductSpec>;
+-      founderContext: Partial<FounderContext>;
+-    };
+
+-    if (!productSpec?.name) {
++    // Validate input with Zod
++    const validationResult = AnalyzeRequestSchema.safeParse(body);
++    if (!validationResult.success) {
+       return NextResponse.json(
+-        { error: 'Product name is required' },
++        {
++          error: 'Invalid input',
++          details: validationResult.error.issues.map((i) => ({
++            field: i.path.join('.'),
++            message: i.message,
++          })),
++        },
+         { status: 400 }
+       );
+     }
+
++    const { productSpec, founderContext } = validationResult.data;
++
+     const prompt = buildAnalyzerPrompt(productSpec, founderContext);
+
+     const message = await anthropic.messages.create({
+@@ -62,10 +113,24 @@ export async function POST(request: NextRequest) {
+       },
+     });
+   } catch (error) {
+-    console.error('Analysis error:', error);
++    // Log error securely
++    console.error('Analysis error:', {
++      message: error instanceof Error ? error.message : 'Unknown error',
++      timestamp: new Date().toISOString(),
++    });
++
++    // Check for specific error types
++    const isRateLimit = error instanceof Error &&
++      (error.message.includes('rate_limit') || error.message.includes('429'));
++
++    if (isRateLimit) {
++      return NextResponse.json(
++        { error: 'Service is temporarily busy. Please try again in a few minutes.' },
++        { status: 503 }
++      );
++    }
++
++    // Generic error message
+     return NextResponse.json(
+-      {
+-        error: error instanceof Error ? error.message : 'Unknown error',
+-      },
++      { error: 'Analysis failed. Please try again.' },
+       { status: 500 }
+     );
+   }
+
+diff --git a/lib/validation.ts b/lib/validation.ts
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/lib/validation.ts
+@@ -0,0 +1,70 @@
++import { z } from 'zod';
++
++// Sanitize string input
++function sanitizeString(str: string): string {
++  return str
++    .trim()
++    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
++    .substring(0, 10000); // Max length
++}
++
++export const ProductSpecSchema = z.object({
++  name: z
++    .string()
++    .min(1, 'Product name is required')
++    .max(100, 'Product name too long')
++    .transform(sanitizeString),
++  thesis: z
++    .string()
++    .max(2000, 'Description too long')
++    .optional()
++    .transform((val) => val ? sanitizeString(val) : undefined),
++  targetUser: z
++    .string()
++    .max(1000)
++    .optional()
++    .transform((val) => val ? sanitizeString(val) : undefined),
++  category: z
++    .enum([
++      'b2b-saas',
++      'b2c-saas',
++      'developer-tools',
++      'fintech',
++      'marketplace',
++      'creator-tools',
++      'other',
++    ])
++    .optional(),
++  mvpFeatures: z
++    .string()
++    .max(5000)
++    .optional()
++    .transform((val) => val ? sanitizeString(val) : undefined),
++  pricing: z
++    .string()
++    .max(500)
++    .optional()
++    .transform((val) => val ? sanitizeString(val) : undefined),
++  distribution: z
++    .string()
++    .max(2000)
++    .optional()
++    .transform((val) => val ? sanitizeString(val) : undefined),
++});
++
++export const FounderContextSchema = z.object({
++  technicalSkill: z
++    .enum(['non-technical', 'beginner', 'intermediate', 'senior', 'expert'])
++    .optional(),
++  domainExperience: z.string().max(2000).optional(),
++  existingAudience: z.string().max(1000).optional(),
++  hoursPerWeek: z.number().min(1).max(168).optional(),
++  runwayMonths: z.number().min(1).max(120).optional(),
++  riskTolerance: z.enum(['conservative', 'moderate', 'aggressive']).optional(),
++});
++
++export const AnalyzeRequestSchema = z.object({
++  productSpec: ProductSpecSchema,
++  founderContext: FounderContextSchema.optional(),
++});
++
++export type ValidatedRequest = z.infer<typeof AnalyzeRequestSchema>;
+
+diff --git a/middleware.ts b/middleware.ts
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/middleware.ts
+@@ -0,0 +1,50 @@
++import { NextResponse } from 'next/server';
++import type { NextRequest } from 'next/server';
++
++export function middleware(request: NextRequest) {
++  const response = NextResponse.next();
++
++  // Prevent clickjacking
++  response.headers.set('X-Frame-Options', 'DENY');
++
++  // Prevent MIME type sniffing
++  response.headers.set('X-Content-Type-Options', 'nosniff');
++
++  // Control referrer information
++  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
++
++  // XSS protection (legacy browsers)
++  response.headers.set('X-XSS-Protection', '1; mode=block');
++
++  // Content Security Policy
++  response.headers.set(
++    'Content-Security-Policy',
++    [
++      "default-src 'self'",
++      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
++      "style-src 'self' 'unsafe-inline'",
++      "img-src 'self' data: https:",
++      "font-src 'self' data:",
++      "connect-src 'self' https://api.anthropic.com",
++      "frame-ancestors 'none'",
++    ].join('; ')
++  );
++
++  // Feature permissions
++  response.headers.set(
++    'Permissions-Policy',
++    'camera=(), microphone=(), geolocation=(), interest-cohort=()'
++  );
++
++  // Remove powered-by header (already handled in next.config.ts)
++  response.headers.delete('X-Powered-By');
++
++  return response;
++}
++
++export const config = {
++  matcher: [
++    // Match all paths except static files
++    '/((?!_next/static|_next/image|favicon.ico).*)',
++  ],
++};
+
+diff --git a/next.config.ts b/next.config.ts
+index 1234567..abcdefg 100644
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -2,7 +2,14 @@ import type { NextConfig } from "next";
+
+ const nextConfig: NextConfig = {
+-  /* config options here */
+   reactCompiler: true,
++
++  // Disable source maps in production
++  productionBrowserSourceMaps: false,
++
++  // Remove X-Powered-By header
++  poweredByHeader: false,
++
++  // Enable strict mode
++  reactStrictMode: true,
+ };
+
+ export default nextConfig;
+
+diff --git a/lib/store.ts b/lib/store.ts
+index 1234567..abcdefg 100644
+--- a/lib/store.ts
++++ b/lib/store.ts
+@@ -3,16 +3,23 @@
+ import { ProductSpec, FounderContext, AnalysisResult } from './types';
+
+ const STORAGE_KEY = 'idea-analyzer-data';
++const EXPIRATION_DAYS = 7;
++const EXPIRATION_MS = EXPIRATION_DAYS * 24 * 60 * 60 * 1000;
+
+ interface StoredData {
+   productSpec: Partial<ProductSpec>;
+   founderContext: Partial<FounderContext>;
+   result: AnalysisResult | null;
++  timestamp?: number;
+ }
+
+-export function getStoredData(): StoredData {
++export function getStoredData(): Omit<StoredData, 'timestamp'> {
+   if (typeof window === 'undefined') {
+     return { productSpec: {}, founderContext: {}, result: null };
+   }
+
+   try {
+     const data = localStorage.getItem(STORAGE_KEY);
+     if (data) {
+-      return JSON.parse(data);
++      const parsed = JSON.parse(data) as StoredData;
++
++      // Check if data has expired
++      if (parsed.timestamp && Date.now() - parsed.timestamp > EXPIRATION_MS) {
++        clearStoredData();
++        return { productSpec: {}, founderContext: {}, result: null };
++      }
++
++      return {
++        productSpec: parsed.productSpec || {},
++        founderContext: parsed.founderContext || {},
++        result: parsed.result || null,
++      };
+     }
+-  } catch {
+-    // Ignore parse errors
++  } catch (error) {
++    console.warn('Failed to parse stored data, clearing:', error);
++    clearStoredData();
+   }
+
+   return { productSpec: {}, founderContext: {}, result: null };
+ }
+
+-export function setStoredData(data: Partial<StoredData>): void {
++export function setStoredData(data: Partial<Omit<StoredData, 'timestamp'>>): void {
+   if (typeof window === 'undefined') return;
+
+   const existing = getStoredData();
+-  const updated = { ...existing, ...data };
++  const updated: StoredData = {
++    ...existing,
++    ...data,
++    timestamp: Date.now(),
++  };
+   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+ }
+
+---
+Instructions to apply:
+
+1. Install zod:
+   npm install zod
+
+2. Create the new files:
+   - lib/validation.ts
+   - middleware.ts
+
+3. Apply changes to existing files:
+   - app/api/analyze/route.ts
+   - next.config.ts
+   - lib/store.ts
+
+4. Test the changes:
+   npm run build
+   npm run start
+
+5. Verify security headers:
+   curl -I http://localhost:3000
+
+6. Test rate limiting:
+   for i in {1..10}; do
+     curl -X POST http://localhost:3000/api/analyze \
+       -H "Content-Type: application/json" \
+       -d '{"productSpec":{"name":"test"}}'
+   done

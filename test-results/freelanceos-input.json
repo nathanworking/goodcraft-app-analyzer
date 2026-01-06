@@ -1,0 +1,19 @@
+{
+  "productSpec": {
+    "name": "FreelanceOS",
+    "category": "b2b-saas",
+    "thesis": "Freelancers use 10+ tools. They need one app that does everything: invoicing, contracts, time tracking, project management, CRM, proposals, and AI to help with all of it.",
+    "targetUser": "All freelancers everywhere",
+    "mvpFeatures": "- Invoice generation\n- Contract templates\n- Time tracking\n- Project/task management\n- Client CRM\n- Proposal builder\n- AI writing assistant\n- Expense tracking",
+    "pricing": "$29/month",
+    "distribution": "Social media, maybe some ads"
+  },
+  "founderContext": {
+    "technicalSkill": "non-technical",
+    "domainExperience": "Worked as freelancer for 1 year",
+    "existingAudience": "200 Instagram followers (personal account)",
+    "hoursPerWeek": 10,
+    "runwayMonths": 6,
+    "riskTolerance": "aggressive"
+  }
+}
