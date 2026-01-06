@@ -2,27 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, VerdictBox, MetricRow, Details, ExpandableConcern, SectionHeader, ScoreCard, Grid, StatCard, CompactMetric, Divider } from '../components/ui';
-import { AnalysisResult, VERDICT_CONFIG, ProductSpec, FounderContext, Verdict, AddressableConcern, ValidationRequirements } from '@/lib/types';
-import { getStoredData, setStoredData, generateMarkdownExport } from '@/lib/store';
-import { ArrowLeft, Download, RefreshCw, CheckCircle, AlertTriangle, XCircle, DollarSign, Users, Clock, Target, TrendingUp, Zap, Shield, Layers } from 'lucide-react';
-
-interface ExtendedAnalysisResult extends AnalysisResult {
-  dimensionScores?: {
-    team: number;
-    buildComplexity: number;
-    competition: number;
-    financialPath: number;
-    userAcquisition: number;
-    technicalRisk: number;
-    defensibility: number;
-    capitalEfficiency: number;
-    pivotPotential: number;
-  };
-  detailedAnalysis?: string;
-  addressableConcerns?: AddressableConcern[];
-  validationRequirements?: ValidationRequirements;
-}
+import { Button } from '../components/ui';
+import { ResultsView, ExtendedAnalysisResult } from '../components/ResultsView';
+import { ProductSpec, FounderContext, Verdict, AddressableConcern, ValidationRequirements } from '@/lib/types';
+import { getStoredData, setStoredData } from '@/lib/store';
+import { RefreshCw, XCircle } from 'lucide-react';
 
 async function analyzeIdea(
   productSpec: Partial<ProductSpec>,
@@ -75,7 +59,6 @@ async function analyzeIdea(
     };
   } catch (error) {
     console.error('API analysis failed, using fallback:', error);
-    // Fallback to simple heuristic analysis
     return fallbackAnalysis(productSpec, founderContext);
   }
 }
@@ -173,7 +156,6 @@ function fallbackAnalysis(
     summaryParts.push('Consider a different approach or building up resources first.');
   }
 
-  // Generate addressable concerns from mustAddress and risks
   const addressableConcerns: AddressableConcern[] = [
     ...mustAddress.map((concern): AddressableConcern => ({
       concern,
@@ -191,7 +173,6 @@ function fallbackAnalysis(
     })),
   ];
 
-  // Generate validation requirements based on context
   const isMarketplace = productSpec.category === 'marketplace';
   const isB2B = productSpec.category === 'b2b-saas';
   const hoursPerWeek = founderContext.hoursPerWeek || 20;
@@ -257,7 +238,6 @@ function fallbackAnalysis(
   };
 }
 
-// Helper function to generate fallback fix suggestions
 function generateFallbackFix(concern: string): string {
   const lowercaseConcern = concern.toLowerCase();
 
@@ -299,14 +279,13 @@ export default function ResultsPage() {
     const stored = getStoredData();
 
     if (!stored.productSpec?.name) {
-      router.push('/');
+      router.push('/new');
       return;
     }
 
     setProductSpec(stored.productSpec);
     setFounderContext(stored.founderContext);
 
-    // Progress messages
     const stages = [
       'Analyzing team requirements...',
       'Evaluating build complexity...',
@@ -328,7 +307,6 @@ export default function ResultsPage() {
       }
     }, 2000);
 
-    // Run the actual analysis
     analyzeIdea(stored.productSpec, stored.founderContext)
       .then((analysisResult) => {
         clearInterval(stageInterval);
@@ -345,28 +323,13 @@ export default function ResultsPage() {
     return () => clearInterval(stageInterval);
   }, [router]);
 
-  const handleExport = () => {
-    if (!result) return;
-
-    const markdown = generateMarkdownExport(result, productSpec, founderContext);
-    const blob = new Blob([markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${result.productName.toLowerCase().replace(/\s+/g, '-')}-analysis.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   if (isAnalyzing) {
     return (
       <main className="min-h-screen py-12 px-4 flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-muted" />
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-foreground/50" />
           <h2 className="text-xl font-semibold mb-2">Analyzing your idea...</h2>
-          <p className="text-muted">{analysisStage}</p>
+          <p className="text-foreground/60">{analysisStage}</p>
         </div>
       </main>
     );
@@ -378,8 +341,8 @@ export default function ResultsPage() {
         <div className="text-center">
           <XCircle className="w-8 h-8 mx-auto mb-4 text-danger" />
           <h2 className="text-xl font-semibold mb-2">Analysis Failed</h2>
-          <p className="text-muted mb-4">{error}</p>
-          <Button onClick={() => router.push('/')}>Try Again</Button>
+          <p className="text-foreground/60 mb-4">{error}</p>
+          <Button onClick={() => router.push('/new')}>Try Again</Button>
         </div>
       </main>
     );
@@ -389,299 +352,13 @@ export default function ResultsPage() {
     return null;
   }
 
-  const verdictConfig = VERDICT_CONFIG[result.verdict];
-
   return (
-    <main className="min-h-screen py-12 px-4">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <Button variant="ghost" onClick={() => router.push('/')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Start Over
-          </Button>
-          <Button variant="secondary" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export .md
-          </Button>
-        </div>
-
-        <h1 className="text-3xl font-bold mb-6">{result.productName} Analysis</h1>
-
-        {/* Verdict Box */}
-        <div className="mb-8">
-          <VerdictBox
-            emoji={verdictConfig.emoji}
-            label={verdictConfig.label}
-            score={result.overallScore}
-            summary={result.verdictSummary}
-            bgColor={verdictConfig.bgColor}
-          />
-        </div>
-
-        {/* Key Scores - 4-column grid for top metrics */}
-        {result.dimensionScores && (
-          <div className="mb-8">
-            <Grid cols={4} gap={3}>
-              <ScoreCard
-                score={result.dimensionScores.team}
-                label="Team Fit"
-                size="md"
-              />
-              <ScoreCard
-                score={result.dimensionScores.buildComplexity}
-                label="Build"
-                size="md"
-              />
-              <ScoreCard
-                score={result.dimensionScores.financialPath}
-                label="Revenue"
-                size="md"
-              />
-              <ScoreCard
-                score={result.dimensionScores.defensibility}
-                label="Moat"
-                size="md"
-              />
-            </Grid>
-          </div>
-        )}
-
-        {/* All Dimension Scores - Collapsible */}
-        {result.dimensionScores && (
-          <Card variant="bordered" className="mb-6">
-            <Details summary="View all 9 dimension scores">
-              <Grid cols={3} gap={3} className="mt-2">
-                {[
-                  { key: 'team', label: 'Team Fit' },
-                  { key: 'buildComplexity', label: 'Build Complexity' },
-                  { key: 'competition', label: 'Competition' },
-                  { key: 'financialPath', label: 'Financial Path' },
-                  { key: 'userAcquisition', label: 'User Acquisition' },
-                  { key: 'technicalRisk', label: 'Technical Risk' },
-                  { key: 'defensibility', label: 'Defensibility' },
-                  { key: 'capitalEfficiency', label: 'Capital Efficiency' },
-                  { key: 'pivotPotential', label: 'Pivot Potential' },
-                ].map(({ key, label }) => {
-                  const score = result.dimensionScores?.[key as keyof typeof result.dimensionScores] ?? 0;
-                  return (
-                    <ScoreCard key={key} score={score} label={label} size="sm" />
-                  );
-                })}
-              </Grid>
-            </Details>
-          </Card>
-        )}
-
-        {/* Why It Works / Doesn't */}
-        <Card variant="bordered" className="mb-6">
-          <SectionHeader
-            emoji={result.verdict === 'build' || result.verdict === 'build-with-changes' ? '💡' : '⚠️'}
-            title={`Why It ${result.verdict === 'build' || result.verdict === 'build-with-changes' ? 'Works' : "Doesn't Work"}`}
-          />
-
-          <div className="space-y-4">
-            {/* Strengths */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="w-4 h-4 text-success" />
-                <span className="font-medium text-sm">What&apos;s in your favor</span>
-              </div>
-              <ul className="space-y-1 pl-6">
-                {result.strengths.map((s, i) => (
-                  <li key={i} className="text-sm text-muted">• {s}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Must Address - Now with expandable concerns */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-warning" />
-                <span className="font-medium text-sm">What you need to address</span>
-                <span className="text-xs text-muted">(click to see how to fix)</span>
-              </div>
-              <div className="space-y-2">
-                {result.addressableConcerns?.filter(c => c.type === 'mustAddress').map((c, i) => (
-                  <ExpandableConcern
-                    key={i}
-                    concern={c.concern}
-                    howToFix={c.howToFix}
-                    effort={c.effort}
-                    impact={c.impact}
-                    variant="warning"
-                    icon={<AlertTriangle className="w-4 h-4 text-warning" />}
-                  />
-                )) || result.mustAddress.map((m, i) => (
-                  <div key={i} className="text-sm text-muted pl-6">• {m}</div>
-                ))}
-              </div>
-            </div>
-
-            {/* Risks - Now with expandable concerns */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <XCircle className="w-4 h-4 text-danger" />
-                <span className="font-medium text-sm">What could kill it</span>
-                <span className="text-xs text-muted">(click to see how to fix)</span>
-              </div>
-              <div className="space-y-2">
-                {result.addressableConcerns?.filter(c => c.type === 'risk').map((c, i) => (
-                  <ExpandableConcern
-                    key={i}
-                    concern={c.concern}
-                    howToFix={c.howToFix}
-                    effort={c.effort}
-                    impact={c.impact}
-                    variant="danger"
-                    icon={<XCircle className="w-4 h-4 text-danger" />}
-                  />
-                )) || result.risks.map((r, i) => (
-                  <div key={i} className="text-sm text-muted pl-6">• {r}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Before You Go All-In - Validation Requirements */}
-        {result.validationRequirements && (
-          <Card variant="bordered" className="mb-6">
-            <SectionHeader
-              emoji="🎯"
-              title="Before You Go All-In"
-              subtitle="What you need to validate this idea"
-            />
-
-            {/* 2-column grid for key metrics */}
-            <Grid cols={2} gap={3} className="mb-4">
-              <StatCard
-                icon={<DollarSign className="w-5 h-5 text-success" />}
-                iconBg="bg-success-bg"
-                label="Capital Needed"
-                value={result.validationRequirements.capitalNeeded.amount}
-                sublabel={result.validationRequirements.capitalNeeded.reason}
-              />
-              <StatCard
-                icon={<Users className="w-5 h-5 text-info" />}
-                iconBg="bg-info-bg"
-                label="Interested People"
-                value={`${result.validationRequirements.interestedPeople.count}+`}
-                sublabel={result.validationRequirements.interestedPeople.type}
-              />
-              <StatCard
-                icon={<Clock className="w-5 h-5 text-warning" />}
-                iconBg="bg-warning-bg"
-                label="Time Investment"
-                value={`${result.validationRequirements.timeCommitment.hoursPerWeek}+ hrs/wk`}
-                sublabel={`for ${result.validationRequirements.timeCommitment.duration}`}
-              />
-              <StatCard
-                icon={<Target className="w-5 h-5 text-primary" />}
-                iconBg="bg-muted"
-                label="Phase"
-                value={result.validationRequirements.timeCommitment.phase.split(' ').slice(0, 3).join(' ')}
-              />
-            </Grid>
-
-            {/* Key Milestones */}
-            <div className="p-4 bg-card border border-border rounded-lg">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="w-4 h-4 text-success" />
-                <span className="font-medium text-sm">Key Milestones Before Committing</span>
-              </div>
-              <div className="space-y-2">
-                {result.validationRequirements.keyMilestones.map((milestone, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-muted text-muted-foreground text-xs font-medium shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm text-muted">{milestone}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* The Numbers */}
-        <Card variant="bordered" className="mb-6">
-          <SectionHeader emoji="📊" title="The Numbers" />
-          <Grid cols={2} gap={3}>
-            <CompactMetric
-              icon={<Zap className="w-4 h-4" />}
-              label="Time to MVP"
-              value={result.metrics.timeToMvp}
-            />
-            <CompactMetric
-              icon={<TrendingUp className="w-4 h-4" />}
-              label="First Revenue"
-              value={result.metrics.timeToFirstRevenue}
-            />
-            <CompactMetric
-              icon={<Users className="w-4 h-4" />}
-              label="Users Needed"
-              value={result.metrics.usersNeeded}
-            />
-            <CompactMetric
-              icon={<Shield className="w-4 h-4" />}
-              label="Competition"
-              value={result.metrics.competition}
-            />
-          </Grid>
-        </Card>
-
-        {/* Action Plan */}
-        <Card variant="bordered" className="mb-6">
-          <SectionHeader emoji="📝" title="Do This First" subtitle="Your 30-day action plan" />
-          <ol className="space-y-3">
-            {result.actions.map((action, i) => (
-              <li key={i} className="flex items-start gap-3 p-3 bg-card border border-border rounded-lg">
-                <span className="flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background text-sm font-bold shrink-0">
-                  {i + 1}
-                </span>
-                <span className="text-sm pt-1">{action}</span>
-              </li>
-            ))}
-          </ol>
-        </Card>
-
-        {/* Detailed Analysis - if available */}
-        {result.detailedAnalysis && (
-          <Card variant="bordered" className="mb-6">
-            <Details summary="📚 View detailed 9-agent analysis">
-              <div className="prose prose-sm max-w-none text-muted">
-                <pre className="whitespace-pre-wrap text-xs overflow-x-auto bg-muted/50 p-4 rounded-lg">
-                  {result.detailedAnalysis}
-                </pre>
-              </div>
-            </Details>
-          </Card>
-        )}
-
-        {/* Collapsible Details */}
-        <Card variant="bordered">
-          <Details summary="📋 View input summary">
-            <Grid cols={2} gap={4} className="mt-2">
-              <div className="p-3 bg-card border border-border rounded-lg">
-                <h4 className="font-medium text-sm mb-2">Product</h4>
-                <p className="text-sm text-muted">{productSpec.thesis}</p>
-              </div>
-              <div className="p-3 bg-card border border-border rounded-lg">
-                <h4 className="font-medium text-sm mb-2">Target User</h4>
-                <p className="text-sm text-muted">{productSpec.targetUser || 'Not specified'}</p>
-              </div>
-              <div className="col-span-2 p-3 bg-card border border-border rounded-lg">
-                <h4 className="font-medium text-sm mb-2">Founder Context</h4>
-                <div className="flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-muted rounded text-xs">{founderContext.technicalSkill} developer</span>
-                  <span className="px-2 py-1 bg-muted rounded text-xs">{founderContext.hoursPerWeek} hrs/week</span>
-                  <span className="px-2 py-1 bg-muted rounded text-xs">{founderContext.runwayMonths} months runway</span>
-                </div>
-              </div>
-            </Grid>
-          </Details>
-        </Card>
-      </div>
-    </main>
+    <ResultsView
+      result={result}
+      productSpec={productSpec}
+      founderContext={founderContext}
+      backUrl="/"
+      backLabel="Back to Dashboard"
+    />
   );
 }

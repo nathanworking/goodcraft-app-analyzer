@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { buildAnalyzerPrompt, parseAnalyzerResponse } from '@/lib/analyzer-prompt';
 import { ProductSpec, FounderContext } from '@/lib/types';
+import { saveReport } from '@/lib/db';
 
 const anthropic = new Anthropic();
 
@@ -55,12 +56,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const result = {
+      productName: productSpec.name || 'Unnamed Product',
+      ...parsed.data,
+    };
+
+    // Try to save to database (don't fail if DB isn't set up)
+    let reportId: string | null = null;
+    try {
+      // Cast to AnalysisResult for database storage
+      reportId = await saveReport(productSpec, founderContext, result as import('@/lib/types').AnalysisResult);
+    } catch (dbError) {
+      console.warn('Failed to save report to database:', dbError);
+      // Continue without failing - DB might not be set up yet
+    }
+
     return NextResponse.json({
       success: true,
-      result: {
-        productName: productSpec.name,
-        ...parsed.data,
-      },
+      result,
+      reportId,
     });
   } catch (error) {
     console.error('Analysis error:', error);

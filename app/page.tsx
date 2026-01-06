@@ -2,86 +2,67 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Input, Textarea, Select, Card, Steps } from './components/ui';
-import {
-  ProductSpec,
-  FounderContext,
-  ProductCategory,
-  TechnicalSkill,
-  RiskTolerance,
-  CATEGORY_LABELS,
-  SKILL_LABELS,
-  RISK_LABELS,
-} from '@/lib/types';
-import { getStoredData, setStoredData } from '@/lib/store';
-import { ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
+import { Button, Grid } from './components/ui';
+import { VERDICT_CONFIG, Verdict } from '@/lib/types';
+import { Plus, FileText, Clock, ChevronRight, Sparkles, Trash2 } from 'lucide-react';
 import LiquidEther from '@/components/LiquidEther';
 
-const STEPS = ['Product', 'Founder', 'Review'];
+interface ReportSummary {
+  id: string;
+  product_name: string;
+  verdict: Verdict;
+  overall_score: number;
+  created_at: string;
+}
 
-const categoryOptions = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+function formatRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-const skillOptions = Object.entries(SKILL_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
 
-const riskOptions = Object.entries(RISK_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-export default function Home() {
+export default function Dashboard() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [productSpec, setProductSpec] = useState<Partial<ProductSpec>>({
-    category: 'b2b-saas',
-  });
-  const [founderContext, setFounderContext] = useState<Partial<FounderContext>>({
-    technicalSkill: 'intermediate',
-    riskTolerance: 'moderate',
-    hoursPerWeek: 20,
-    runwayMonths: 12,
-  });
+  const [reports, setReports] = useState<ReportSummary[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = getStoredData();
-    if (stored.productSpec && Object.keys(stored.productSpec).length > 0) {
-      setProductSpec((prev) => ({ ...prev, ...stored.productSpec }));
-    }
-    if (stored.founderContext && Object.keys(stored.founderContext).length > 0) {
-      setFounderContext((prev) => ({ ...prev, ...stored.founderContext }));
-    }
+    fetchReports();
   }, []);
 
-  const updateProduct = (updates: Partial<ProductSpec>) => {
-    const updated = { ...productSpec, ...updates };
-    setProductSpec(updated);
-    setStoredData({ productSpec: updated });
-  };
-
-  const updateFounder = (updates: Partial<FounderContext>) => {
-    const updated = { ...founderContext, ...updates };
-    setFounderContext(updated);
-    setStoredData({ founderContext: updated });
-  };
-
-  const canProceed = () => {
-    if (step === 0) {
-      return productSpec.name && productSpec.thesis && productSpec.mvpFeatures;
+  const fetchReports = async () => {
+    try {
+      const res = await fetch('/api/reports');
+      const data = await res.json();
+      if (data.success) {
+        setReports(data.reports || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch reports:', error);
+    } finally {
+      setLoading(false);
     }
-    if (step === 1) {
-      return founderContext.technicalSkill && founderContext.hoursPerWeek;
-    }
-    return true;
   };
 
-  const handleAnalyze = () => {
-    setStoredData({ productSpec, founderContext });
-    router.push('/results');
+  const deleteReport = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Delete this report?')) return;
+
+    try {
+      await fetch(`/api/reports/${id}`, { method: 'DELETE' });
+      setReports(reports.filter(r => r.id !== id));
+    } catch (error) {
+      console.error('Failed to delete report:', error);
+    }
   };
 
   return (
@@ -102,220 +83,115 @@ export default function Home() {
         />
       </div>
 
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2 text-white drop-shadow-lg">Idea Analyzer</h1>
-          <p className="text-gray-200">Should you build it? Let&apos;s find out.</p>
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-3 text-white drop-shadow-lg">Idea Analyzer</h1>
+          <p className="text-gray-300 text-lg">Should you build it? Let&apos;s find out.</p>
         </div>
 
-        <div className="mb-8">
-          <Steps steps={STEPS} currentStep={step} />
-        </div>
-
-        <Card variant="bordered" className="mb-6">
-          {step === 0 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Tell us about your product</h2>
-
-              <Input
-                label="Product Name *"
-                placeholder="e.g., InvoiceBot"
-                value={productSpec.name || ''}
-                onChange={(e) => updateProduct({ name: e.target.value })}
-              />
-
-              <Select
-                label="Category"
-                options={categoryOptions}
-                value={productSpec.category || 'b2b-saas'}
-                onChange={(e) => updateProduct({ category: e.target.value as ProductCategory })}
-              />
-
-              <Textarea
-                label="What problem does it solve? *"
-                hint="Describe the pain point and your solution in 2-3 sentences"
-                placeholder="e.g., Freelancers spend 2+ hours/week creating invoices manually. InvoiceBot auto-generates branded invoices from time tracking data."
-                value={productSpec.thesis || ''}
-                onChange={(e) => updateProduct({ thesis: e.target.value })}
-              />
-
-              <Textarea
-                label="Who is this for?"
-                placeholder="e.g., Solo freelancers and small agencies who bill hourly"
-                value={productSpec.targetUser || ''}
-                onChange={(e) => updateProduct({ targetUser: e.target.value })}
-              />
-
-              <Textarea
-                label="MVP Features *"
-                hint="List the core features for v1 (one per line)"
-                placeholder="e.g.,&#10;- Connect to Toggl/Clockify&#10;- Generate PDF invoices&#10;- Email invoices to clients&#10;- Simple dashboard"
-                value={productSpec.mvpFeatures || ''}
-                onChange={(e) => updateProduct({ mvpFeatures: e.target.value })}
-                className="min-h-[150px]"
-              />
-
-              <Input
-                label="Pricing"
-                placeholder="e.g., $9/month or Free with $19/month pro"
-                value={productSpec.pricing || ''}
-                onChange={(e) => updateProduct({ pricing: e.target.value })}
-              />
-
-              <Textarea
-                label="How will you get users?"
-                placeholder="e.g., Post in freelancer communities, content marketing on Twitter, ProductHunt launch"
-                value={productSpec.distribution || ''}
-                onChange={(e) => updateProduct({ distribution: e.target.value })}
-              />
-            </div>
-          )}
-
-          {step === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Tell us about you</h2>
-
-              <Select
-                label="Technical Skill Level"
-                options={skillOptions}
-                value={founderContext.technicalSkill || 'intermediate'}
-                onChange={(e) =>
-                  updateFounder({ technicalSkill: e.target.value as TechnicalSkill })
-                }
-              />
-
-              <Textarea
-                label="Relevant Experience"
-                placeholder="e.g., 5 years as a freelancer, built 2 SaaS products before, know the invoicing pain firsthand"
-                value={founderContext.domainExperience || ''}
-                onChange={(e) => updateFounder({ domainExperience: e.target.value })}
-              />
-
-              <Textarea
-                label="Existing Audience"
-                placeholder="e.g., 2K Twitter followers in freelance space, 500 email subscribers, active in 3 Slack communities"
-                value={founderContext.existingAudience || ''}
-                onChange={(e) => updateFounder({ existingAudience: e.target.value })}
-              />
-
-              <Input
-                label="Hours per week available"
-                type="number"
-                min={1}
-                max={80}
-                value={founderContext.hoursPerWeek || 20}
-                onChange={(e) => updateFounder({ hoursPerWeek: parseInt(e.target.value) || 20 })}
-              />
-
-              <Input
-                label="Runway (months)"
-                type="number"
-                min={1}
-                max={60}
-                value={founderContext.runwayMonths || 12}
-                onChange={(e) => updateFounder({ runwayMonths: parseInt(e.target.value) || 12 })}
-              />
-
-              <Select
-                label="Risk Tolerance"
-                options={riskOptions}
-                value={founderContext.riskTolerance || 'moderate'}
-                onChange={(e) =>
-                  updateFounder({ riskTolerance: e.target.value as RiskTolerance })
-                }
-              />
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Review & Analyze</h2>
-
-              <div className="space-y-4">
-                <div className="p-4 bg-background rounded-lg">
-                  <h3 className="font-medium mb-2">Product</h3>
-                  <dl className="space-y-1 text-sm">
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Name:</dt>
-                      <dd>{productSpec.name || '-'}</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Category:</dt>
-                      <dd>{CATEGORY_LABELS[productSpec.category as ProductCategory] || '-'}</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Problem:</dt>
-                      <dd className="flex-1">{productSpec.thesis || '-'}</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Pricing:</dt>
-                      <dd>{productSpec.pricing || '-'}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                <div className="p-4 bg-background rounded-lg">
-                  <h3 className="font-medium mb-2">Founder</h3>
-                  <dl className="space-y-1 text-sm">
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Skill:</dt>
-                      <dd>{SKILL_LABELS[founderContext.technicalSkill as TechnicalSkill] || '-'}</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Hours/week:</dt>
-                      <dd>{founderContext.hoursPerWeek}</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Runway:</dt>
-                      <dd>{founderContext.runwayMonths} months</dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="text-muted w-24">Risk:</dt>
-                      <dd>{RISK_LABELS[founderContext.riskTolerance as RiskTolerance]?.split(' - ')[0] || '-'}</dd>
-                    </div>
-                  </dl>
-                </div>
-              </div>
-
-              <div className="p-4 border border-info bg-info-bg rounded-lg">
-                <p className="text-sm">
-                  <strong>Ready to analyze!</strong> We&apos;ll evaluate your idea across 9 dimensions:
-                  team fit, build complexity, competition, financials, user acquisition, technical risk,
-                  defensibility, capital efficiency, and pivot potential.
-                </p>
-              </div>
-            </div>
-          )}
-        </Card>
-
-        <div className="flex justify-between">
-          <Button
-            variant="ghost"
-            onClick={() => setStep(step - 1)}
-            disabled={step === 0}
-            className="text-white hover:bg-white/20 hover:text-white disabled:text-white/40"
+        {/* Action Cards */}
+        <Grid cols={2} gap={4} className="mb-12">
+          {/* New Report Card */}
+          <button
+            onClick={() => router.push('/new')}
+            className="group text-left p-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl hover:bg-white/20 hover:border-white/40 transition-all cursor-pointer"
           >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            Back
-          </Button>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center shrink-0 group-hover:bg-white/30 transition-colors">
+                <Plus className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white mb-1">New Analysis</h2>
+                <p className="text-gray-400 text-sm">Analyze a new product idea with our 9-dimension framework</p>
+              </div>
+            </div>
+          </button>
 
-          {step < STEPS.length - 1 ? (
-            <Button
-              onClick={() => setStep(step + 1)}
-              disabled={!canProceed()}
-              className="bg-white text-gray-900 hover:bg-gray-100"
-            >
-              Next
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
+          {/* Sample Report Card */}
+          <button
+            onClick={() => router.push('/sample')}
+            className="group text-left p-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl hover:bg-white/20 hover:border-white/40 transition-all cursor-pointer"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center shrink-0 group-hover:bg-white/30 transition-colors">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white mb-1">Sample Report</h2>
+                <p className="text-gray-400 text-sm">See what an analysis looks like with our example report</p>
+              </div>
+            </div>
+          </button>
+        </Grid>
+
+        {/* Reports List */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2 text-white">
+              <span>📊</span>
+              Your Reports
+            </h2>
+            {reports.length > 0 && (
+              <p className="text-sm text-gray-400 mt-1">{reports.length} analysis{reports.length === 1 ? '' : 'es'} run</p>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="py-12 text-center">
+              <Sparkles className="w-6 h-6 animate-pulse mx-auto mb-2 text-gray-400" />
+              <p className="text-gray-400 text-sm">Loading reports...</p>
+            </div>
+          ) : reports.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 text-gray-500" />
+              </div>
+              <p className="text-gray-400 mb-4">No reports yet</p>
+              <Button
+                onClick={() => router.push('/new')}
+                className="bg-white text-gray-900 hover:bg-gray-100"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create your first analysis
+              </Button>
+            </div>
           ) : (
-            <Button
-              onClick={handleAnalyze}
-              className="bg-white text-gray-900 hover:bg-gray-100"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Analyze Idea
-            </Button>
+            <div className="space-y-2">
+              {reports.map((report) => {
+                const verdictConfig = VERDICT_CONFIG[report.verdict] || VERDICT_CONFIG.maybe;
+                const createdAt = new Date(report.created_at);
+
+                return (
+                  <button
+                    key={report.id}
+                    onClick={() => router.push(`/report/${report.id}`)}
+                    className="w-full group flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-all text-left cursor-pointer"
+                  >
+                    <div className="text-2xl">{verdictConfig.emoji}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-white truncate">{report.product_name}</div>
+                      <div className="flex items-center gap-3 text-sm text-gray-400">
+                        <span>{verdictConfig.label}</span>
+                        <span>•</span>
+                        <span>{report.overall_score.toFixed(1)}/10</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-sm">{formatRelativeTime(createdAt)}</span>
+                    </div>
+                    <button
+                      onClick={(e) => deleteReport(report.id, e)}
+                      className="p-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete report"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-white transition-colors" />
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
